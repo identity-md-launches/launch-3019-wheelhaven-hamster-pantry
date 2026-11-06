@@ -6,6 +6,16 @@
   <meta name="theme-color" content="#234b3b">
   <meta name="description" content="Wheelhaven: Hamster Pantry, an original crop strategy game powered by Squeektoshi's real wheel passages. Grow carrots, broccoli and sunflower seeds. 仓鼠粮仓：给仓鼠种食材的 Squeekchain 小游戏。">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.squeekchain.com; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none';">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Wheelhaven">
+  <meta property="og:title" content="Wheelhaven · Hamster Pantry 仓鼠粮仓">
+  <meta property="og:description" content="Grow carrots, broccoli and sunflower seeds with a real hamster's wheel passages. 给仓鼠种食材的 Squeekchain 小游戏。">
+  <meta property="og:url" content="https://wheelhaven.imd.site/">
+  <meta property="og:image" content="https://wheelhaven.imd.site/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Wheelhaven: an illustrated hamster in its wheel beside the Hamster Pantry title">
+  <meta name="twitter:card" content="summary_large_image">
   <title>Wheelhaven · 仓鼠粮仓</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
   <link rel="stylesheet" href="./styles.css">
@@ -24,7 +34,7 @@
     </section>
 
     <section class="play-section" aria-labelledby="garden-title">
-      <div class="play-heading"><div><p class="eyebrow" data-i18n="chapter">YOUR LITTLE FOOD PATCH / 01</p><h2 id="garden-title" data-i18n="gardenTitle">今天，也给粮仓添一篮</h2></div></div>
+      <div class="play-heading"><div><p class="eyebrow" data-i18n="chapter">你的小小食材田 · 01</p><h2 id="garden-title" data-i18n="gardenTitle">今天，也给粮仓添一篮</h2></div></div>
       <div id="mode-note" class="mode-note"></div>
       <div class="game-layout">
         <div class="garden-column">
@@ -37,12 +47,12 @@
           </div>
           <div class="garden-bottom"><span id="growth-explainer"></span><button class="text-button" id="save-button" data-i18n="saveGarden">保存与迁移 ↗</button></div>
         </div>
-        <aside class="seed-tray" aria-labelledby="tray-title"><div class="tray-heading"><span class="eyebrow" data-i18n="seedTray">SEED TRAY</span><span class="tray-number">03</span></div><h3 id="tray-title" data-i18n="chooseSeed">先选一颗种子</h3><p class="tray-description" data-i18n="seedHint">再轻点一块空地，让故事开始。</p><div id="seed-options" role="group" aria-label="Seed selection"></div><div class="season-note" id="season-note"></div><button class="button rescue" id="rescue-button" hidden data-i18n="rescue">领一颗应急胡萝卜种子</button></aside>
+        <aside class="seed-tray" aria-labelledby="tray-title"><div class="tray-heading"><span class="eyebrow" data-i18n="seedTray">种子盘</span><span class="tray-number">03</span></div><h3 id="tray-title" data-i18n="chooseSeed">先选一颗种子</h3><p class="tray-description" data-i18n="seedHint">再轻点一块空地，让故事开始。</p><div id="seed-options" role="group" aria-label="Seed selection"></div><div class="season-note" id="season-note"></div><button class="button rescue" id="rescue-button" hidden data-i18n="rescue">领一颗应急胡萝卜种子</button></aside>
       </div>
     </section>
 
     <section class="restoration" aria-labelledby="restore-title"><div class="section-heading"><div><p class="eyebrow" data-i18n="nextChapter">下一小步</p><h2 id="restore-title" data-i18n="restoreTitle">让这片小天地，重新发光</h2></div><p id="goal-summary"></p></div><div class="buildings" id="buildings"></div></section>
-    <section class="journal" aria-labelledby="journal-title"><div><span class="eyebrow" data-i18n="fieldNotes">HARVEST NOTES</span><h2 id="journal-title" data-i18n="journalTitle">粮仓里的小事</h2></div><div id="journal-entries"></div></section>
+    <section class="journal" aria-labelledby="journal-title"><div><span class="eyebrow" data-i18n="fieldNotes">收获笔记</span><h2 id="journal-title" data-i18n="journalTitle">粮仓里的小事</h2></div><div id="journal-entries"></div></section>
     <footer class="site-footer"><span>Wheelhaven <span class="footer-star">✳</span> <span data-i18n="footer">给仓鼠种食材的 Squeekchain 小游戏。</span></span><div><a href="https://sepolia.squeekchain.com/" target="_blank" rel="noopener" data-i18n="official">认识 Squeektoshi ↗</a><button class="text-button" id="footer-evidence-button" data-i18n="liveNotes">真实数据</button><button class="text-button" id="about-button" data-i18n="about">关于作品</button></div></footer>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>

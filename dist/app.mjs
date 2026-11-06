@@ -1,14 +1,15 @@
 import { SPECIES, IMPROVEMENTS, createGarden, season, expansionCost, needed, ready, plantSeed, waterPlant, harvest, harvestAll, expandPlot, buyImprovement, parseTelemetry, applyTelemetry, restoreGarden, canRescue } from './game.mjs';
 import { icon, cropArt, wheelArt, buildingArt } from './art.mjs';
+import { createPantryStore } from './store.mjs';
 
 const COPY = {
   zh: {
     brandSub:'仓鼠粮仓 · 一小步，一篮好食材', howTo:'怎么玩', liveNotes:'真实数据', eyebrow:'小小脚步，满满收获',
     title:'把每一小步，<br>种成一篮<span>好食材。</span>', intro:'种下胡萝卜、西兰花和向日葵，等仓鼠跑过下一圈。照料食材田，收获它喜欢的食物，一点点建好你的仓鼠粮仓。', sceneCaption:'一只真实的仓鼠 · 一点点真实的生长',
-    chapter:'YOUR LITTLE FOOD PATCH / 01', gardenTitle:'今天，也给粮仓添一篮',
+    chapter:'你的小小食材田 · 01', gardenTitle:'今天，也给粮仓添一篮',
     liveNote:'作物随 Squeektoshi 的真实跑轮步数生长。它休息时，食材田也歇一歇。',
     dew:'露珠', harvests:'已收获', harvestAll:'收获成熟作物', gardenSign:'小小食材，慢慢长大',
-    seedTray:'SEED TRAY', chooseSeed:'先选一颗种子', seedHint:'再轻点一块空地，让故事开始。',
+    seedTray:'种子盘', chooseSeed:'先选一颗种子', seedHint:'再轻点一块空地，让故事开始。',
     carrot:'胡萝卜', broccoli:'西兰花', sunflower:'向日葵', carrotDesc:'橙色小萝卜，为仓鼠菜篮添一口脆甜。', broccoliDesc:'长成一小棵绿树，收下一朵朵菜花。', sunflowerDesc:'等花盘慢慢饱满，收获一篮葵花籽。',
     seedCost:'{n} 露珠', passages:'{n} 步', yield:'收获 {n}', selected:'已选', select:'选择', locked:'待解锁', libraryRequired:'建成种子屋后解锁',
     season:'本轮偏爱 · {name}', seasonBonus:'现在播种，收获额外 +2 露珠。', seasonUnknown:'等待结算回合，季节加成暂未启用。',
@@ -17,7 +18,7 @@ const COPY = {
     nextChapter:'下一小步', restoreTitle:'让这片小天地，重新发光', goalSummary:'修复三处小建筑，点亮粮仓灯塔。', goalWon:'灯塔已经亮起。继续种植，为粮仓添上新的收获。',
     mill:'小水车', library:'种子屋', beacon:'粮仓灯塔', millDesc:'让每一次收获额外获得 1 露珠。', libraryDesc:'解锁向日葵，为菜篮添一把葵花籽。', beaconDesc:'把所有小小的努力，汇成远处的一束光。',
     build:'修复 · {n} 露珠', built:'已修复', requireHarvests:'需要收获 {n} 次', requireBuildings:'先修复水车和种子屋',
-    fieldNotes:'HARVEST NOTES', journalTitle:'粮仓里的小事', journalEmpty:'第一颗种子，会是这个故事的开始。',
+    fieldNotes:'收获笔记', journalTitle:'粮仓里的小事', journalEmpty:'第一颗种子，会是这个故事的开始。',
     journalPlanted:'种下了一颗{name}。', journalHarvested:'收获{name}，得到 {n} 露珠。', journalWatered:'给{name}浇了水。', journalBuilt:'修复了{name}。', journalExpanded:'又开出了一块新食材田。', journalReanchored:'跑轮计数重新定位，已保留植物进度。', journalRescued:'种下了一颗应急胡萝卜。',
     footer:'给仓鼠种食材的 Squeekchain 小游戏。', official:'认识 Squeektoshi ↗', about:'关于作品',
     connecting:'正在听听小轮子的动静…', resting:'Squeektoshi 正在休息', running:'小轮子正在转 · {n} RPM', offline:'暂时听不到小轮子的声音',
@@ -40,21 +41,21 @@ const COPY = {
     aboutTitle:'一个小粮仓，跟着真实的小脚步', aboutDesc:'Wheelhaven · 仓鼠粮仓是为 Squeekchain 创作的独立种植策略游戏。胡萝卜、西兰花和葵花籽构成仓鼠食材主题；作物、资源、浇水、扩地和建筑形成完整的游戏循环。作物生长由官方传感器报告的真实跑轮步数驱动。', aboutCredit:'作品由 FLau1212 创作，使用 Codex 辅助开发。与 Squeekchain 官方没有隶属关系。源码使用 MIT 许可证。', sourceDownload:'下载完整源码 ↗', noWallet:'无需钱包 · 无下注 · 无金钱奖励', dataNote:'实时传感器进度不是已结算的链上奖励。', lastSaved:'进度自动保存在此浏览器',
   },
   en: {
-    brandSub:'Hamster Pantry · Little laps, fresh harvests', howTo:'How to play', liveNotes:'Live evidence', eyebrow:'LITTLE FOOTSTEPS. FRESH HARVESTS.',
+    brandSub:'Hamster Pantry · Little laps, fresh harvests', howTo:'How to play', liveNotes:'Live evidence', eyebrow:'Little footsteps, fresh harvests',
     title:'Every little lap.<br>A basket of <span>goodness.</span>', intro:'Grow carrots, broccoli and sunflowers for their seeds. Let a real hamster’s little laps grow your crops, and build a pantry one harvest at a time.', sceneCaption:'One real hamster. A little real growth.',
-    chapter:'YOUR LITTLE FOOD PATCH / 01', gardenTitle:'A good day to fill the pantry',
+    chapter:'Your little food patch · 01', gardenTitle:'A good day to fill the pantry',
     liveNote:'Crops grow with Squeektoshi’s real accepted wheel passages. When he rests, your crops take a little pause too.',
     dew:'Dew', harvests:'Harvests', harvestAll:'Harvest ready plants', gardenSign:'Good things grow slowly',
-    seedTray:'SEED TRAY', chooseSeed:'Start with a little seed', seedHint:'Then tap an empty patch. Every story starts somewhere.',
+    seedTray:'Seed tray', chooseSeed:'Start with a little seed', seedHint:'Then tap an empty patch. Every story starts somewhere.',
     carrot:'Carrot', broccoli:'Broccoli', sunflower:'Sunflower', carrotDesc:'A little orange crunch for the hamster’s basket.', broccoliDesc:'Grow a little green tree. Gather a basket of florets.', sunflowerDesc:'Let the golden head ripen into sunflower seeds.',
     seedCost:'{n} dew', passages:'{n} passages', yield:'Yield {n}', selected:'Selected', select:'Choose', locked:'Locked', libraryRequired:'Restore the seed library to unlock',
     season:'This round loves {name}', seasonBonus:'Plant now for +2 dew at harvest.', seasonUnknown:'Waiting for the settled round. No seasonal bonus yet.',
     growHint:'Each new accepted wheel passage grows every planted crop together.',
     saveGarden:'Save & move pantry ↗', rescue:'Get an emergency carrot seed',
-    nextChapter:'THE NEXT LITTLE CHAPTER', restoreTitle:'Make this little place shine again', goalSummary:'Restore all three buildings. Light your pantry beacon.', goalWon:'The beacon is shining. Stay a little longer. Keep growing.',
+    nextChapter:'The next little chapter', restoreTitle:'Make this little place shine again', goalSummary:'Restore all three buildings. Light your pantry beacon.', goalWon:'The beacon is shining. Stay a little longer. Keep growing.',
     mill:'Little watermill', library:'Seed library', beacon:'Pantry beacon', millDesc:'One extra dew with every harvest. Little things add up.', libraryDesc:'Unlock sunflowers and gather their golden seeds.', beaconDesc:'Turn all those little efforts into a light on the horizon.',
     build:'Restore · {n} dew', built:'Restored', requireHarvests:'Requires {n} harvests', requireBuildings:'Restore the mill and library first',
-    fieldNotes:'HARVEST NOTES', journalTitle:'Little pantry stories', journalEmpty:'Your first seed will be the beginning of this story.',
+    fieldNotes:'Harvest notes', journalTitle:'Little pantry stories', journalEmpty:'Your first seed will be the beginning of this story.',
     journalPlanted:'Planted a little {name}.', journalHarvested:'Harvested {name}. Collected {n} dew.', journalWatered:'Watered the {name}.', journalBuilt:'Restored the {name}.', journalExpanded:'Made room for one more patch of green.', journalReanchored:'The wheel counter restarted. Your plants kept their progress.', journalRescued:'Planted an emergency carrot seed.',
     footer:'A Squeekchain game about growing hamster food.', official:'Meet Squeektoshi ↗', about:'About the project',
     connecting:'Listening for the little wheel…', resting:'Squeektoshi is taking a nap', running:'The little wheel is turning · {n} RPM', offline:'Waiting to hear from the wheel',
@@ -82,7 +83,7 @@ const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let language = readPreference('language', 'zh');
 if (!COPY[language]) language = 'zh';
-let pantry = loadGarden('live');
+const store = createPantryStore(storageArea());
 let selectedSeed = 'carrot', rescueQueued = false, activePlot = null, sample = null, lastGoodSample = null;
 let busy = false, toastTimer, pendingImport = null, currentInfo = null;
 const STATUS_URL = 'https://api.squeekchain.com/v1/status';
@@ -95,17 +96,31 @@ function t(key, values = {}) {
 }
 function readPreference(key, fallback) { try { return localStorage.getItem(`wheelhaven.${key}`) || fallback; } catch { return fallback; } }
 function writePreference(key, value) { try { localStorage.setItem(`wheelhaven.${key}`, value); } catch {} }
-function loadGarden(kind) { try { const raw = localStorage.getItem(`wheelhaven.v2.${kind}`) || localStorage.getItem(`wheelhaven.v1.${kind}`); return raw ? restoreGarden(raw, kind) : createGarden(kind); } catch { return createGarden(kind); } }
-function save() {
-  try { localStorage.setItem('wheelhaven.v2.live', JSON.stringify(pantry)); return true; }
-  catch { toast(t('saveUnavailable')); return false; }
+function storageArea() {
+  try { return window.localStorage; }
+  catch { return { getItem: () => null, setItem: () => { throw new Error('storageUnavailable'); } }; }
 }
-function state() { return pantry; }
-function liveReady() { return !!sample?.ok && Date.now() - Date.parse(sample.receivedAt) <= sample.staleMs; }
-function showResult(result, success) {
-  if (result.ok) { save(); render(); if (success) toast(success); }
+function state() { return store.current(); }
+// Another tab may have moved on since this tab last looked. Adopt the newest valid pantry first.
+function adoptLatest() {
+  if (store.sync().changed) afterAdopt();
+  return state();
+}
+function afterAdopt() {
+  const s = state();
+  if (selectedSeed === 'sunflower' && !s.improvements.library) selectedSeed = 'carrot';
+  if (rescueQueued && !canRescue(s)) rescueQueued = false;
+  render();
+}
+// Every gameplay action runs on the newest stored pantry and is written back at once.
+function act(mutate, success, done) {
+  const { result, saved, adopted } = store.commit(mutate);
+  if (adopted && !result.ok) afterAdopt();
+  if (result.ok) { done?.(result); render(); if (saved === false) toast(t('saveUnavailable')); else if (success) toast(typeof success === 'function' ? success(result) : success); }
   else toast(t(result.reason));
+  return result;
 }
+function liveReady() { return !!sample?.ok && Date.now() - Date.parse(sample.receivedAt) <= sample.staleMs; }
 function toast(message) {
   clearTimeout(toastTimer);
   $('#toast').textContent = message;
@@ -191,20 +206,19 @@ function renderFeed() {
 }
 
 function usePlot(index) {
-  const s = state(), plot = s.plots[index];
+  const s = adoptLatest(), plot = s.plots[index];
   if (!plot) return;
   if (plot.unlocked && !plot.plant) {
     if (!liveReady()) { toast(t('needFresh')); return; }
-    const result = plantSeed(s,index,selectedSeed,rescueQueued);
-    if (result.ok) rescueQueued = false;
-    showResult(result,t('planted',{name:t(selectedSeed)}));
+    const seed = selectedSeed, rescue = rescueQueued;
+    act(g => plantSeed(g,index,seed,rescue), t('planted',{name:t(seed)}), () => { rescueQueued = false; });
     return;
   }
   activePlot = index; renderPlotDialog(); $('#plot-dialog').showModal();
 }
 
 function dialogHeader(title,id='info-title',close='info') {
-  return `<div class="dialog-header"><span class="eyebrow">WHEELHAVEN</span><button id="${close}-dialog-close" class="icon-button" data-close="${close}" aria-label="${t('close')}">${icon('close')}</button></div><h2 id="${id}">${title}</h2>`;
+  return `<div class="dialog-header"><span class="eyebrow">Wheelhaven</span><button id="${close}-dialog-close" class="icon-button" data-close="${close}" aria-label="${t('close')}">${icon('close')}</button></div><h2 id="${id}">${title}</h2>`;
 }
 
 function renderPlotDialog() {
@@ -254,10 +268,12 @@ async function refreshFeed() {
     sample=next;
     if (next.ok) {
       lastGoodSample=next;
-      const previousRound=pantry.round;
-      const result=applyTelemetry(pantry,next);
-      gardenChanged=result.reanchored || result.delta!=='0' || previousRound!==pantry.round;
-      try { localStorage.setItem('wheelhaven.v2.live',JSON.stringify(pantry)); } catch {}
+      // Apply the sample to the newest stored pantry so its anchor, not this tab's copy, decides the
+      // passages that count. Only real changes are written; an idle tab writes nothing.
+      let previousRound;
+      const { result, adopted }=store.commit(g=>{ previousRound=g.round; return applyTelemetry(g,next); },
+        r=>r.reanchored || r.delta!=='0' || previousRound!==state().round);
+      gardenChanged=adopted || (result.ok && (result.reanchored || result.delta!=='0' || previousRound!==state().round));
     }
   } catch { sample={ok:false,reason:'unavailable'}; }
   finally { busy=false; if(gardenChanged)render();else renderFeed(); if ($('#info-dialog').open && currentInfo==='evidence') openInfo('evidence'); }
@@ -275,12 +291,12 @@ $('#save-button').addEventListener('click',()=>openInfo('save'));
 $('#plots').addEventListener('click',event=>{ const b=event.target.closest('[data-plot]'); if (b) usePlot(Number(b.dataset.plot)); });
 $('#seed-options').addEventListener('click',event=>{ const b=event.target.closest('[data-seed]'); if(b&&!b.disabled){selectedSeed=b.dataset.seed;rescueQueued=false;render();} });
 $('#harvest-all').addEventListener('click',()=>{
-  const result=harvestAll(state());showResult(result,t('harvested',{count:result.count,n:result.gain}));
+  act(harvestAll,r=>t('harvested',{count:r.count,n:r.gain}));
 });
-$('#rescue-button').addEventListener('click',()=>{if(canRescue(state())){selectedSeed='carrot';rescueQueued=true;render();toast(t('rescueToast'));}});
+$('#rescue-button').addEventListener('click',()=>{if(canRescue(adoptLatest())){selectedSeed='carrot';rescueQueued=true;render();toast(t('rescueToast'));}});
 $('#buildings').addEventListener('click',event=>{
   const b=event.target.closest('[data-build]');if(!b||b.disabled)return;
-  const key=b.dataset.build,result=buyImprovement(state(),key);showResult(result,t('builtToast',{name:t(key)}));
+  const key=b.dataset.build,result=act(g=>buyImprovement(g,key),t('builtToast',{name:t(key)}));
   if(result.ok&&key==='beacon')openInfo('win');
 });
 document.addEventListener('click',event=>{
@@ -289,28 +305,30 @@ document.addEventListener('click',event=>{
   const action=event.target.closest('[data-action]')?.dataset.action;
   if(!action)return;
   if(action==='harvest'){
-    const result=harvest(state(),activePlot);$('#plot-dialog').close();activePlot=null;
-    showResult(result,t('harvested',{count:1,n:result.gain}));
+    const index=activePlot;$('#plot-dialog').close();activePlot=null;
+    act(g=>harvest(g,index),r=>t('harvested',{count:1,n:r.gain}));
   }
-  if(action==='water')showResult(waterPlant(state(),activePlot),t('wateredToast'));
+  if(action==='water'){const index=activePlot;act(g=>waterPlant(g,index),t('wateredToast'));}
   if(action==='expand'){
-    const result=expandPlot(state(),activePlot);if(result.ok){$('#plot-dialog').close();activePlot=null;}
-    showResult(result,t('expanded'));
+    const index=activePlot;
+    act(g=>expandPlot(g,index),t('expanded'),()=>{$('#plot-dialog').close();activePlot=null;});
   }
   if(action==='export'){
-    const blob=new Blob([JSON.stringify(state(),null,2)],{type:'application/json'}),url=URL.createObjectURL(blob);
+    const blob=new Blob([JSON.stringify(adoptLatest(),null,2)],{type:'application/json'}),url=URL.createObjectURL(blob);
     const a=document.createElement('a');a.href=url;a.download='wheelhaven-pantry.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   if(action==='reset-dialog')openInfo('reset');
   if(action==='reset-confirm'){
-    pantry=createGarden('live');if(liveReady())applyTelemetry(pantry,sample);
-    selectedSeed='carrot';rescueQueued=false;save();$('#info-dialog').close();render();toast(t('resetDone'));
+    const fresh=createGarden('live');if(liveReady())applyTelemetry(fresh,sample);
+    const saved=store.replace(fresh);
+    selectedSeed='carrot';rescueQueued=false;activePlot=null;$('#plot-dialog').close();$('#info-dialog').close();render();toast(t(saved?'resetDone':'saveUnavailable'));
   }
   if(action==='import-confirm'&&pendingImport){
-    pendingImport.anchor=null;pantry=pendingImport;pendingImport=null;
-    if(liveReady())applyTelemetry(pantry,sample);
+    const imported=pendingImport;imported.anchor=null;pendingImport=null;
+    if(liveReady())applyTelemetry(imported,sample);
+    const saved=store.replace(imported);
     selectedSeed='carrot';rescueQueued=false;activePlot=null;$('#plot-dialog').close();
-    save();$('#info-dialog').close();render();toast(t('imported'));
+    $('#info-dialog').close();render();toast(t(saved?'imported':'saveUnavailable'));
   }
 });
 document.addEventListener('change',async event=>{
@@ -325,9 +343,12 @@ for(const dialog of document.querySelectorAll('dialog')){
   dialog.addEventListener('click',event=>{if(event.target===dialog){const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)dialog.close();}});
   dialog.addEventListener('close',()=>{if(dialog.id==='plot-dialog')activePlot=null;else currentInfo=null;});
 }
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshFeed();});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){adoptLatest();refreshFeed();}});
 window.addEventListener('online',refreshFeed);
-window.addEventListener('pagehide',save);
+window.addEventListener('focus',adoptLatest);
+window.addEventListener('storage',event=>{if(store.handleStorageEvent(event).changed)afterAdopt();});
+// pagehide never writes this tab's copy over newer progress; it only retries a write that failed.
+window.addEventListener('pagehide',()=>store.flush());
 render();refreshFeed();
 setInterval(refreshFeed,15_000);
 setInterval(()=>{if(sample?.ok&&!liveReady()){renderFeed();$('#mode-note').textContent=t('needFresh');}},5000);
