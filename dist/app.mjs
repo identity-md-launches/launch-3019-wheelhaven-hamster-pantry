@@ -113,8 +113,8 @@ function afterAdopt() {
   render();
 }
 // Every gameplay action runs on the newest stored pantry and is written back at once.
-function act(mutate, success, done) {
-  const { result, saved, adopted } = store.commit(mutate);
+async function act(mutate, success, done) {
+  const { result, saved, adopted } = await store.commit(mutate);
   if (adopted && !result.ok) afterAdopt();
   if (result.ok) { done?.(result); render(); if (saved === false) toast(t('saveUnavailable')); else if (success) toast(typeof success === 'function' ? success(result) : success); }
   else toast(t(result.reason));
@@ -133,8 +133,8 @@ function render() {
   const s = state();
   document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
   document.title = language === 'zh' ? 'Wheelhaven · 仓鼠粮仓' : 'Wheelhaven · Hamster Pantry powered by Squeektoshi';
-  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
-  document.querySelectorAll('[data-i18n-html]').forEach(el => { el.innerHTML = t(el.dataset.i18nHtml); });
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.getAttribute('data-i18n')); });
+  document.querySelectorAll('[data-i18n-html]').forEach(el => { el.innerHTML = t(el.getAttribute('data-i18n-html')); });
   $('#language-button').textContent = language === 'zh' ? 'EN' : '中文';
   $('#language-button').setAttribute('aria-label', language === 'zh' ? 'Switch to English' : '切换到中文');
   $('#mode-note').textContent = t('liveNote');
@@ -211,7 +211,7 @@ function usePlot(index) {
   if (plot.unlocked && !plot.plant) {
     if (!liveReady()) { toast(t('needFresh')); return; }
     const seed = selectedSeed, rescue = rescueQueued;
-    act(g => plantSeed(g,index,seed,rescue), t('planted',{name:t(seed)}), () => { rescueQueued = false; });
+    act(g => liveReady() ? plantSeed(g,index,seed,rescue) : {ok:false,reason:'needFresh'}, t('planted',{name:t(seed)}), () => { rescueQueued = false; });
     return;
   }
   activePlot = index; renderPlotDialog(); $('#plot-dialog').showModal();
@@ -271,9 +271,10 @@ async function refreshFeed() {
       // Apply the sample to the newest stored pantry so its anchor, not this tab's copy, decides the
       // passages that count. Only real changes are written; an idle tab writes nothing.
       let previousRound;
-      const { result, adopted }=store.commit(g=>{ previousRound=g.round; return applyTelemetry(g,next); },
-        r=>r.reanchored || r.delta!=='0' || previousRound!==state().round);
+      const { result, adopted, saved }=await store.commit(g=>{ previousRound=g.round; return applyTelemetry(g,next); },
+        (r,g)=>r.reanchored || r.delta!=='0' || previousRound!==g.round);
       gardenChanged=adopted || (result.ok && (result.reanchored || result.delta!=='0' || previousRound!==state().round));
+      if(saved===false)toast(t('saveUnavailable'));
     }
   } catch { sample={ok:false,reason:'unavailable'}; }
   finally { busy=false; if(gardenChanged)render();else renderFeed(); if ($('#info-dialog').open && currentInfo==='evidence') openInfo('evidence'); }
@@ -294,15 +295,17 @@ $('#harvest-all').addEventListener('click',()=>{
   act(harvestAll,r=>t('harvested',{count:r.count,n:r.gain}));
 });
 $('#rescue-button').addEventListener('click',()=>{if(canRescue(adoptLatest())){selectedSeed='carrot';rescueQueued=true;render();toast(t('rescueToast'));}});
-$('#buildings').addEventListener('click',event=>{
+$('#buildings').addEventListener('click',async event=>{
   const b=event.target.closest('[data-build]');if(!b||b.disabled)return;
-  const key=b.dataset.build,result=act(g=>buyImprovement(g,key),t('builtToast',{name:t(key)}));
+  const key=b.dataset.build,result=await act(g=>buyImprovement(g,key),t('builtToast',{name:t(key)}));
   if(result.ok&&key==='beacon')openInfo('win');
 });
-document.addEventListener('click',event=>{
-  const close=event.target.closest('[data-close]');
-  if(close){$(close.dataset.close==='plot'?'#plot-dialog':'#info-dialog').close();return;}
-  const action=event.target.closest('[data-action]')?.dataset.action;
+document.addEventListener('click',async event=>{
+  if(!(event.target instanceof Element))return;
+  const target=event.target;
+  const close=target.closest('[data-close]');
+  if(close){$(close.getAttribute('data-close')==='plot'?'#plot-dialog':'#info-dialog').close();return;}
+  const action=target.closest('[data-action]')?.getAttribute('data-action');
   if(!action)return;
   if(action==='harvest'){
     const index=activePlot;$('#plot-dialog').close();activePlot=null;
@@ -319,20 +322,20 @@ document.addEventListener('click',event=>{
   }
   if(action==='reset-dialog')openInfo('reset');
   if(action==='reset-confirm'){
-    const fresh=createGarden('live');if(liveReady())applyTelemetry(fresh,sample);
-    const saved=store.replace(fresh);
+    target.closest('[data-action]').setAttribute('disabled','');
+    const saved=await store.replace(createGarden('live'),sample);
     selectedSeed='carrot';rescueQueued=false;activePlot=null;$('#plot-dialog').close();$('#info-dialog').close();render();toast(t(saved?'resetDone':'saveUnavailable'));
   }
   if(action==='import-confirm'&&pendingImport){
-    const imported=pendingImport;imported.anchor=null;pendingImport=null;
-    if(liveReady())applyTelemetry(imported,sample);
-    const saved=store.replace(imported);
+    target.closest('[data-action]').setAttribute('disabled','');
+    const imported=pendingImport;pendingImport=null;
+    const saved=await store.replace(imported,sample);
     selectedSeed='carrot';rescueQueued=false;activePlot=null;$('#plot-dialog').close();
     $('#info-dialog').close();render();toast(t(saved?'imported':'saveUnavailable'));
   }
 });
 document.addEventListener('change',async event=>{
-  if(event.target.id!=='import-save')return;
+  if(!(event.target instanceof HTMLInputElement)||event.target.id!=='import-save')return;
   const file=event.target.files?.[0];if(!file)return;
   try{
     if(file.size>50_000)throw new Error('tooLarge');

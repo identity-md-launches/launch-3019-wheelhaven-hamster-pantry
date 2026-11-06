@@ -1,0 +1,47 @@
+# Revision validation · 2026-11-06
+
+Scope: reproduce and repair the four reopened findings without redesigning the accepted game. The production export and native module source are the same `dist/` tree. No package manifest, dependency, ignore rule, game engine, original illustration, CSS, HTML, license or attribution was changed. The build adds a reproducible source-download assembly/check rather than introducing a bundler.
+
+## Reproductions and repairs
+
+| Finding | Reproduced before edits | Repair and regression |
+| --- | --- | --- |
+| c79948cf… / overlapping commits | Actual modules and shared Map storage: nested A.commit inside B's mutation produced dew=5, rev=3 and plots 3/4, losing A's crop at 1. | `dist/store.mjs:17` coordinates full operations; `commit` rereads after acquiring the lock. Node regression schedules A between B's read and write. Browser regression pauses D with the debugger after planting and before writing, confirms A is waiting, then resumes. Both final states have plots 1/3/4 and dew=3. |
+| 238f754f… / stale archive | Python ZipFile comparison found app, DESIGN, HTML and CSS differed; store, both synchronization test files and og-image were missing. | `scripts/source-archive.py` deterministically rebuilds an explicit public source list and compares every member and the exact file list. `scripts/build.mjs` calls it. Browser checks the actual About download against the export ZIP. |
+| 0fcfe4a1… / replacement anchor rewind | Actual app import/reset sequence: old local work=100 replaced shared work=105. Replaying 105 grew imported broccoli from 5 to 10, or a new reset crop from 0 to 5. | `dist/store.mjs:47` selects the replacement anchor under the lock; `dist/app.mjs` passes its sample instead of preanchoring. Node and browser tests use different feed ages for both operations; Node also covers differing epochs, expired feeds and newer counter resets. Imported crop stays at 5; reset crop stays at 0 when replaying 105. |
+| 7e334238… / failed revisions and resurrection | Two forced quota failures allocated B.rev=3; A's reset saved rev=2; B.flush rewrote rev=4, dew=3 and three crops. | `dist/store.mjs` increments revisions only after successful persistence; pending changes keep their exact base. `flush` locks and compares that base. Node tests exercise reset/import with and without explicit sync; browser tests force two real Storage.setItem failures, replace from another tab and dispatch pagehide. No replacement is overwritten. |
+
+The store's IndexedDB fallback uses one readwrite object-store transaction and executes its synchronous localStorage operation during the active request callback; concurrent connections cannot enter that scope together. If neither coordination mechanism is available, mutation fails with the existing save warning. Storage-read failure also refuses an unseen overwrite. Actual page unload cannot guarantee completion of asynchronous retries; they are best effort, and normal successful actions persist immediately. A previous application version or unrelated code that directly writes the key does not participate in this protocol.
+
+## Commands and results
+
+- `npm test`: **45/45 passed**, including the unchanged original **15 engine tests** and **30 synchronization tests**. The initial accepted tree's 28 tests also passed before repair despite all four reproduced findings.
+- `node scripts/typecheck.mjs test/scratch/tools/node_modules/typescript/lib/tsc.js`: all production modules pass TypeScript 5.9.3 `--allowJs --checkJs --noEmit`, ES2022 + DOM/DOM.Iterable. No TypeScript migration or production dependency was added.
+- `node scripts/build.mjs` and `python3 scripts/source-archive.py --check`: validate native module syntax/imports, relative HTML assets and required metadata; rebuild and verify the complete source archive. Final byte/file counts are printed by the script, not hard-coded into the ZIP's own documentation.
+- Extracted the public ZIP into a clean temporary directory, ran its build and all 45 Node tests successfully, and confirmed its regenerated ZIP was byte-identical. The public download rebuilds independently of task inputs and scratch tooling.
+- `IMD_PLAYWRIGHT=<external Playwright index.mjs> node test/browser-sync.mjs`: Chromium interaction suite, tested with Web Locks and repeated with `WHEELHAVEN_COORDINATION=indexeddb` to disable Web Locks in all tabs and exercise real cross-connection IndexedDB serialization. Both backends pass **18/18 checks** covering concurrency, idle refresh/close, storage events, telemetry, reset/import, repeated quota failures, keyboard focus, both downloads and reduced motion.
+- `node .imd/reads/skills/design-critic/scripts/taste.mjs --out test/scratch/taste --offline`: **16/16 passed**, exit 0. No missing local resources/script errors, overflow, text overlap, clipping, crowded targets, failing measured text contrast, casing/tracking/type-scale/copy/chrome/share/motion failures. Four controls are below the probe's comfortable 44px size but meet its 24px/spacing criterion. The probe's Chinese word-count heuristic is not a language-quality assessment.
+- `node test/check-live.mjs`: **passed**, both official endpoints returned HTTP 200 and CORS `*`; valid hardware sample, matching installation, processed round 322 and work 3817 at the time of the check. This is a point-in-time check, not an availability guarantee.
+
+Tool setup: optional TypeScript/Playwright packages were isolated in disposable `test/scratch/tools/`; they are excluded from the submission and the archive. The supplied MCP browser launcher could not start because its temporary socket path was too long. Direct Playwright with the installed Chromium headless shell and a short `/tmp` directory worked. The pinned probe ran unchanged through a scratch module that only selected that executable. No browser security feature or production asset was changed to obtain a pass.
+
+## Better Interface review
+
+The pinned workflow and the core principles of all six domains were read and applied to this bounded revision. The product's existing botanical paper/forest palette, bilingual voice, serif/system-sans pairing and SVG crops/wheel remain authoritative. No visual redesign was needed for these findings.
+
+| Domain | Coverage and evidence | Remaining limits |
+| --- | --- | --- |
+| Accessibility | Checked native buttons/dialogs, input label, existing live status and focus styles (`dist/index.html:63`, `dist/styles.css:3`). Browser checks keyboard planting, focus retention after asynchronous render, Escape and modal focus return. The probe measures target spacing and reduced motion. | No screen-reader session, forced-colors/native zoom or physical-device test. |
+| Layout | Checked source breakpoints (`dist/styles.css:13`–15), screenshot and overflow at 320/390/1440. At 390×844 the full first unlocked plot is visible. UI tests render both languages. | Intermediate widths and every dialog/content combination were not exhaustively measured. |
+| Writing | Checked unchanged Chinese/English save warnings, reset/import consequence/confirmation labels and success timing (`dist/app.mjs:114`, reset/import handlers). Success follows awaited persistence; failures retain the existing export guidance. | No bilingual editorial rewrite; the accepted voice is preserved. |
+| Typography | Existing serif/system-sans scale and weights preserved. Screenshots confirm wrapping; probe reports 5 recurring sizes (6 including one-offs at 390), 2 families and 3 weights. | Exact fallback-font availability on other platforms not verified. |
+| Colors | Tokens and all CSS preserved. Probe resolves rendered solid-background text pairs and reports every measured pair meeting 4.5:1, or 3:1 for large text. | This does not establish contrast for SVG artwork, all transient states or every possible focus/background pair. No dark mode exists. |
+| UI | Checked original seed selection, crop states, asynchronous feedback, save/import/reset dialogs, source/export links and reduced-motion behavior. The full store operation is serialized while the existing interface remains responsive. | Animation replay at 10% speed, WebKit and physical phone behavior not checked. |
+
+Screenshots generated and visually inspected: `test/scratch/browser/390-zh.png`, `390-en.png`, `390-keyboard-focus.png` and `test/scratch/taste/shots/1440.png`; the probe also saved screenshots at 320 and 390 and the browser suite saved narrow reflow. Scratch evidence is disposable and is not part of the public source download. The required share image remains in `dist/og-image.png` and in the source ZIP.
+
+## Delivery
+
+Local revision and export are complete for the four reported findings; all four are answered in `.imd-responses.json`. The source archive check is part of every production build. `VALIDATION.md` is the public record; `artifacts/validation.md` is an identical delivery copy and is not required to rebuild a clone. The complete source/export fit the 8 MiB submission budget, with no added production dependencies or caches.
+
+Public GitHub/site publication was not performed by this worker: this environment exposes no GitHub or site-publishing tool/CLI, and the assignment forbids modifying `.git/`. The prepared source/export must pass through IMD's repository/site delivery stage to update the public repository and existing wheelhaven.imd.site address. No public deployment or repository update is claimed here.
