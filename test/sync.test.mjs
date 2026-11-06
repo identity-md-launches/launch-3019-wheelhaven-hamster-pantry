@@ -371,7 +371,118 @@ for (const kind of ['reset', 'import']) {
     await A.refresh(sample(107, 10));
     assert.equal(b.stored().plots[4].plant.grown, 2);
   });
+
+  // A planted a crop at S100 and counted S105. B's feed is down while its own S100 response is pending.
+  const planted = async () => {
+    const b = browser(), A = b.open(), B = b.open();
+    const old = sample(100), latest = sample(105, 5);
+    await A.refresh(old);
+    await A.store.commit(g => plantSeed(g, 4, 'broccoli'));
+    await A.refresh(latest);
+    assert.equal(b.stored().plots[4].plant.grown, 5);
+    const replacement = () => {
+      if (kind === 'reset') return createGarden('live');
+      const next = restoreGarden(b.stored(), 'live');
+      next.replayFloor = { epoch: latest.epoch, work: '1', receivedAt: new Date(NOW - 100_000).toISOString() }; // ignored
+      return next;
+    };
+    return { b, A, B, old, latest, replacement, grown: kind === 'reset' ? 0 : 5 };
+  };
+  const replant = async ({ A }) => { if (kind === 'reset') await A.store.commit(g => plantSeed(g, 4, 'broccoli')); };
+  const expired = () => { const s = sample(1); s.receivedAt = s.observedAt = new Date(NOW - 400_000).toISOString(); return s; };
+
+  for (const [name, feed] of [['no', () => null], ['an unavailable', () => ({ ok: false, reason: 'unavailable' })], ['an expired', expired]]) {
+    test(`${kind} with ${name} local feed rejects a delayed older response and a replay of the shared sample`, async () => {
+      const t = await planted(), { b, A, B, old, latest } = t;
+      assert.equal(await B.store.replace(t.replacement(), feed()), true);
+      assert.equal(b.stored().anchor, null);
+      assert.equal(b.stored().replayFloor.work, '105');
+      await replant(t);
+      const before = b.data.get(LIVE_KEY);
+      assert.equal((await B.refresh(old)).result.reason, 'outOfOrder');
+      assert.equal(b.data.get(LIVE_KEY), before, 'a rejected response writes nothing');
+      await A.refresh(latest);
+      assert.equal(b.stored().anchor.work, '105');
+      assert.equal(b.stored().replayFloor, null);
+      assert.equal(b.stored().plots[4].plant.grown, t.grown);
+      await B.refresh(old);
+      await B.refresh(latest);
+      assert.equal(b.stored().plots[4].plant.grown, t.grown);
+      await Promise.all([A.refresh(sample(108, 10)), B.refresh(sample(108, 10))]);
+      assert.equal(b.stored().plots[4].plant.grown, t.grown + 3);
+    });
+  }
+
+  test(`${kind} baselines on the first response newer than the floor without historical growth`, async () => {
+    const t = await planted(), { b, A, B } = t;
+    await B.store.replace(t.replacement(), null);
+    await replant(t);
+    await B.refresh(sample(120, 10));
+    assert.equal(b.stored().anchor.work, '120');
+    assert.equal(b.stored().plots[4].plant.grown, t.grown);
+    await A.refresh(sample(121, 15));
+    assert.equal(b.stored().plots[4].plant.grown, t.grown + 1);
+  });
+
+  test(`${kind} floor survives a second replacement, a fresh older local sample and a newly opened tab`, async () => {
+    const t = await planted(), { b, A, B, old, latest } = t;
+    await B.store.replace(t.replacement(), null);
+    await A.store.replace(t.replacement(), { ok: false, reason: 'unavailable' });
+    assert.equal(b.stored().replayFloor.work, '105');
+    await B.store.replace(t.replacement(), old);
+    assert.equal(b.stored().anchor, null, 'an older fresh sample cannot become the baseline');
+    assert.equal(b.stored().replayFloor.work, '105');
+    await replant(t);
+    const C = b.open();
+    assert.equal((await C.refresh(old)).result.reason, 'outOfOrder');
+    await C.close();
+    await A.refresh(latest);
+    assert.equal(b.stored().plots[4].plant.grown, t.grown);
+  });
+
+  test(`${kind} floor also rejects an older response from a previous device epoch`, async () => {
+    const b = browser(), A = b.open(), B = b.open();
+    const oldDevice = sample(100), newDevice = sample(5, 5, 'wheel-b');
+    await A.refresh(oldDevice);
+    await A.refresh(newDevice);
+    const next = createGarden('live');
+    if (kind === 'import') plantSeed(next, 4, 'broccoli');
+    await B.store.replace(next, null);
+    if (kind === 'reset') await A.store.commit(g => plantSeed(g, 4, 'broccoli'));
+    assert.equal((await B.refresh(oldDevice)).result.reason, 'outOfOrder');
+    await A.refresh(newDevice);
+    assert.equal(b.stored().anchor.epoch, newDevice.epoch);
+    assert.equal(b.stored().plots[4].plant.grown, 0);
+  });
+
+  test(`${kind} over an undated legacy anchor waits for a response from after the replacement`, async () => {
+    const b = browser();
+    const old = createGarden('live'); old.anchor = { epoch: 'sepolia-installation/wheel-a', work: '105' };
+    b.data.set(LIVE_KEY, JSON.stringify(old));
+    const A = b.open(), B = b.open();
+    const next = createGarden('live');
+    if (kind === 'import') plantSeed(next, 4, 'broccoli');
+    await B.store.replace(next, null);
+    if (kind === 'reset') await A.store.commit(g => plantSeed(g, 4, 'broccoli'));
+    assert.equal((await B.refresh(sample(100, -10))).result.reason, 'outOfOrder');
+    // A genuine counter restart reported after the replacement is not stalled by the old count.
+    await A.refresh(sample(3, 5));
+    assert.equal(b.stored().anchor.work, '3');
+    assert.equal(b.stored().plots[4].plant.grown, 0);
+  });
 }
+
+test('a delayed response from a previous device epoch cannot rewind the anchor and regrow its passages', async () => {
+  const b = browser(), A = b.open(), B = b.open();
+  await A.refresh(sample(100));
+  await A.store.commit(g => plantSeed(g, 4, 'broccoli'));
+  await A.refresh(sample(105, 5));
+  await A.refresh(sample(5, 10, 'wheel-b'));
+  assert.equal((await B.refresh(sample(100))).result.reason, 'outOfOrder');
+  assert.equal((await A.refresh(sample(105, 5))).result.reason, 'outOfOrder');
+  assert.equal(b.stored().anchor.epoch, 'sepolia-installation/wheel-b');
+  assert.equal(b.stored().plots[4].plant.grown, 5);
+});
 
 test('a newer fresh sample reanchors replacements without awarding work, including a counter reset', async () => {
   const b = browser(), A = b.open();

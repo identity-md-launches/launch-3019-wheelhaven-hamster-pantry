@@ -16,7 +16,7 @@ export function createGarden(mode) {
     version: 2, mode, dew: 12, harvests: 0, points: 0,
     plots: Array.from({ length: 9 }, (_, id) => ({ unlocked: ORDER.slice(0, 4).includes(id), plant: null })),
     improvements: { mill: false, library: false, beacon: false },
-    anchor: null, round: '0', practiceWork: '0',
+    anchor: null, replayFloor: null, round: '0', practiceWork: '0',
     journal: [],
   };
 }
@@ -165,12 +165,15 @@ export function parseTelemetry(status, economy, now = Date.now()) {
 
 export function applyTelemetry(state, sample) {
   if (state.mode !== 'live' || !sample?.ok) return { ok: false, reason: 'invalidTelemetry' };
-  const previous = state.anchor;
-  if (previous?.epoch === sample.epoch && previous.receivedAt &&
-    Date.parse(sample.receivedAt) < Date.parse(previous.receivedAt)) return { ok: false, reason: 'outOfOrder' };
+  const previous = state.anchor, floor = previous ?? state.replayFloor, next = BigInt(sample.work);
+  // A delayed response must not rewind the newest sample, or a replay of that sample would count again.
+  if (floor?.receivedAt) {
+    const age = Date.parse(sample.receivedAt) - Date.parse(floor.receivedAt);
+    if (age < 0 || (age === 0 && floor.epoch === sample.epoch && next < BigInt(floor.work))) return { ok: false, reason: 'outOfOrder' };
+  }
   if (sample.round !== null) state.round = sample.round;
-  const next = BigInt(sample.work);
   state.anchor = { epoch: sample.epoch, work: sample.work, receivedAt: sample.receivedAt };
+  state.replayFloor = null;
   if (!previous || previous.epoch !== sample.epoch || next < BigInt(previous.work)) {
     if (previous) note(state, 'reanchored');
     return { ok: true, reanchored: true, delta: '0' };
@@ -222,10 +225,15 @@ export function restoreGarden(raw, expectedMode) {
   });
   if (result.plots.filter(p => p.unlocked).length < 4) throw new Error('invalidSave');
   // Normal browser restores retain the anchor; the explicit import flow clears it.
-  if (x.anchor && typeof x.anchor.epoch === 'string' && x.anchor.epoch.length < 200 && decimal(x.anchor.work)) {
-    result.anchor = { epoch: x.anchor.epoch, work: x.anchor.work };
-    if (typeof x.anchor.receivedAt === 'string' && Number.isFinite(Date.parse(x.anchor.receivedAt))) result.anchor.receivedAt = x.anchor.receivedAt;
-  }
+  const marker = m => {
+    if (!m || typeof m.epoch !== 'string' || m.epoch.length >= 200 || !decimal(m.work)) return null;
+    const value = { epoch: m.epoch, work: m.work };
+    if (typeof m.receivedAt === 'string' && Number.isFinite(Date.parse(m.receivedAt))) value.receivedAt = m.receivedAt;
+    return value;
+  };
+  result.anchor = marker(x.anchor);
+  const floor = marker(x.replayFloor);
+  if (!result.anchor && floor?.receivedAt) result.replayFloor = floor;
   result.journal = Array.isArray(x.journal) ? x.journal.slice(0, 8).filter(e =>
     e && typeof e.kind === 'string' && /^[a-z]+$/.test(e.kind) && typeof e.detail === 'string' && e.detail.length < 50 && Number.isFinite(e.at)
   ).map(e => ({ kind: e.kind, detail: e.detail, at: e.at })) : [];

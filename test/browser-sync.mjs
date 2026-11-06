@@ -134,6 +134,79 @@ try {
       assert.equal((await stored(A)).plots[4].plant.grown, kind === 'reset' ? 0 : grown);
     });
   }
+  // Each scenario gets its own context, so its pantry starts empty, and its own controllable feed.
+  for (const kind of ['import', 'reset']) {
+    await check(`${kind} in a tab whose feed is down rejects its delayed response and a replay of the shared sample`, async () => {
+      const isolated = await browser.newContext({ viewport: { width: 390, height: 844 } });
+      if (process.env.WHEELHAVEN_COORDINATION === 'indexeddb') {
+        await isolated.addInitScript(() => Object.defineProperty(navigator, 'locks', { value: undefined }));
+      }
+      try {
+        const now = Date.now();
+        const json = body => ({ status: 200, headers: { 'access-control-allow-origin': '*', 'content-type': 'application/json' }, body: JSON.stringify(body) });
+        const measured = (units, secondsAgo) => {
+          const at = new Date(now - secondsAgo * 1000).toISOString();
+          return json({ schemaVersion: 1, installationId: 'mock-installation', measurement: { freshness: 'online', provenance: 'hardware', receivedAt: at, observedAt: at, staleAfterSeconds: 120, counterEpoch: 'e1', cumulativeWorkUnits: String(units), rpmMilli: 900, coreStatus: 'RUNNING' } });
+        };
+        const S100 = measured(100, 10), S105 = measured(105, 5);
+        const tab = async feed => {
+          const page = await isolated.newPage(), control = { respond: route => route.fulfill(feed) };
+          await page.route('https://api.squeekchain.com/**', route => route.request().url().endsWith('/status') ? control.respond(route) : route.fulfill(json(economy)));
+          await page.goto(url);
+          await page.waitForFunction(() => document.querySelector('#wheel-dot')?.classList.contains('running'));
+          return { page, control };
+        };
+        const a = await tab(S100), b = await tab(S100);
+        const planted = async () => {
+          await a.page.click('#seed-broccoli'); await a.page.click('#plot-4');
+          await a.page.waitForFunction(() => document.querySelector('#dew-resource strong').textContent === '7');
+        };
+        await planted();
+
+        // B's feed goes down, then its next request stays in flight with the older sample.
+        b.control.respond = route => route.fulfill({ status: 503, headers: { 'access-control-allow-origin': '*' }, body: '' });
+        await refresh(b.page);
+        let held, requested;
+        const pending = new Promise(resolve => { requested = resolve; });
+        b.control.respond = route => { held = route; requested(); };
+        await b.page.evaluate(() => window.dispatchEvent(new Event('online')));
+        await pending;
+
+        a.control.respond = route => route.fulfill(S105);
+        await refresh(a.page);
+        const shared = await stored(a.page);
+        assert.equal(shared.anchor.work, '105');
+        assert.equal(shared.plots[4].plant.grown, 5);
+
+        await b.page.click('#save-button');
+        if (kind === 'import') {
+          await b.page.setInputFiles('#import-save', { name: 'pantry.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(shared)) });
+          await b.page.click('[data-action="import-confirm"]');
+        } else {
+          await b.page.click('[data-action="reset-dialog"]');
+          await b.page.click('[data-action="reset-confirm"]');
+        }
+        await b.page.waitForFunction(() => !document.querySelector('#info-dialog').open);
+        if (kind === 'reset') await planted();
+        const expected = kind === 'reset' ? 0 : 5;
+
+        await held.fulfill(S100);
+        await b.page.waitForTimeout(300);
+        await refresh(a.page);
+        const replayed = await stored(a.page);
+        assert.equal(replayed.plots[4].plant.grown, expected, 'no new passages arrived');
+        assert.equal(replayed.anchor.work, '105');
+        assert.equal(replayed.dew, 7);
+
+        // The first new passages after the baseline count exactly once across both tabs.
+        const S108 = measured(108, 0);
+        a.control.respond = route => route.fulfill(S108);
+        b.control.respond = route => route.fulfill(S108);
+        await refresh(a.page); await refresh(b.page);
+        assert.equal((await stored(a.page)).plots[4].plant.grown, expected + 3);
+      } finally { await isolated.close(); }
+    });
+  }
   await check('a real competing tab waits while the first tab is paused after mutation and before write', async () => {
     for (const page of [A, D]) {
       await page.evaluate(async () => {

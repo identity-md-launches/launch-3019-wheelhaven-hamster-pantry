@@ -42,22 +42,25 @@ function coordinator(key, locks, indexedDB) {
 
 // Replacement crops must never receive passages from before the reset/import. Ignore the imported
 // anchor. A fresh local sample can establish a baseline, but cannot rewind a newer shared sample,
-// even across installation/epoch changes. Without fresh telemetry, the next feed only reanchors.
+// even across installation/epoch changes. Without fresh telemetry, the next feed only reanchors, and
+// the newest shared sample stays behind as a replay floor so a delayed response cannot become that
+// baseline. An undated legacy anchor is older than this replacement, so it takes this moment as its date.
 function anchorReplacement(next, current, sample) {
+  const shared = current.anchor;
   next.anchor = null;
+  next.replayFloor = shared ? { ...shared, receivedAt: shared.receivedAt ?? new Date().toISOString() } : current.replayFloor;
   const now = Date.now(), received = Date.parse(sample?.receivedAt), observed = Date.parse(sample?.observedAt);
   if (!sample?.ok || !Number.isFinite(sample.staleMs) || sample.staleMs < 10_000 || sample.staleMs > 300_000 ||
     !Number.isFinite(received) || !Number.isFinite(observed) || now - received > sample.staleMs ||
     now - observed > sample.staleMs || received - now > 60_000 || observed - now > 60_000) return;
-  const shared = current.anchor;
   if (shared && (Date.parse(shared.receivedAt) > received ||
     (shared.epoch === sample.epoch && BigInt(shared.work) > BigInt(sample.work) &&
       (!shared.receivedAt || Date.parse(shared.receivedAt) === received)))) {
     // An undated legacy anchor cannot establish freshness. Defer to the next feed in that case.
-    if (shared.receivedAt) { next.anchor = { ...shared }; next.round = current.round; }
+    if (shared.receivedAt) { next.anchor = { ...shared }; next.replayFloor = null; next.round = current.round; }
     return;
   }
-  applyTelemetry(next, sample); // anchor is null, so this awards no growth
+  applyTelemetry(next, sample); // anchor is null, so this awards no growth; the floor can still refuse it
 }
 
 // Validates a stored string. Saves written before revisions existed count as revision 0.
